@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Optional
+import logging
 
 from newspaper import Article, Config
 
+LOGGER = logging.getLogger(__name__)
 
 class ArticleExtractor:
     """Extract article metadata and content from a URL."""
@@ -20,12 +22,7 @@ class ArticleExtractor:
         )
 
     def extract(self, url: str) -> Optional[dict[str, Any]]:
-        """Extract article details from a URL.
-
-        Returns:
-            A dictionary with title, full text, authors, publish date, and top image,
-            or None when extraction fails.
-        """
+        """Extract article details from a URL using NLP for enrichment."""
         try:
             config = Config()
             config.browser_user_agent = self.user_agent
@@ -34,6 +31,10 @@ class ArticleExtractor:
             article = Article(url=url, config=config)
             article.download()
             article.parse()
+            
+            # CRITICAL: This generates keywords and the summary
+            # It requires the 'lxml_html_clean' and NLTK data to be present
+            article.nlp() 
 
             publish_date = article.publish_date
             if isinstance(publish_date, datetime):
@@ -45,13 +46,17 @@ class ArticleExtractor:
                 "authors": article.authors or [],
                 "publish_date": publish_date,
                 "top_image": article.top_image or None,
+                "keywords": article.keywords or [],   # Added from NLP
+                "summary": article.summary or None    # Added from NLP
             }
-        except Exception:
+        except Exception as e:
+            LOGGER.error(f"Extraction failed for {url}: {str(e)}")
             return None
 
 
 if __name__ == "__main__":
-    sample_url = "https://www.reuters.com/world/"
+    # Test with a specific article rather than a landing page for better results
+    sample_url = "https://www.reuters.com/world/middle-east/israel-strikes-lebanon-after-hezbollah-rocket-fire-2024-05-06/"
     extractor = ArticleExtractor()
     result = extractor.extract(sample_url)
 
@@ -59,4 +64,6 @@ if __name__ == "__main__":
         print("Extraction failed.")
     else:
         print("Extraction succeeded:")
-        print(result)
+        print(f"Title: {result['title']}")
+        print(f"Keywords: {result['keywords']}")
+        print(f"Summary Snippet: {result['summary'][:150]}...")
